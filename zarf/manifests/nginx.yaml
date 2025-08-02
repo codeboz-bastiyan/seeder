@@ -1,0 +1,50 @@
+# manifests/nginx-web-server.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: nginx
+spec:
+  type: NodePort # This is the key to exposing it on a node port
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: 32200 # This specifies the non-administrative port to use
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25.1
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: iso-storage
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: iso-storage
+        hostPath:
+          path: /opt/hci-provisioner/web/iso
+          type: DirectoryOrCreate

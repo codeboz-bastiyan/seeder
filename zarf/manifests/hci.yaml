@@ -1,0 +1,65 @@
+# manifests/harvester-cluster-config.yaml
+apiVersion: metal.harvesterhci.io/v1alpha1
+kind: AddressPool
+metadata:
+  name: ###ZARF_VAR_NODE_NAME###-pool
+  namespace: seeder-system
+spec:
+  cidr: "###ZARF_VAR_NODE_IP###/32"
+  gateway: "###ZARF_VAR_NETWORK_GATEWAY###"
+  netmask: "###ZARF_VAR_NETWORK_NETMASK###"
+---
+apiVersion: metal.harvesterhci.io/v1alpha1
+kind: AddressPool
+metadata:
+  name: vip-pool
+  namespace: seeder-system
+spec:
+  cidr: "###ZARF_VAR_HARVESTER_VIP###/32"
+  gateway: "###ZARF_VAR_NETWORK_GATEWAY###"
+  netmask: "###ZARF_VAR_NETWORK_NETMASK###"
+---
+apiVersion: metal.harvesterhci.io/v1alpha1
+kind: Inventory
+metadata:
+  name: "###ZARF_VAR_NODE_NAME###"
+  namespace: seeder-system
+spec:
+  primaryDisk: "/dev/sdd"
+  managementInterfaceMacAddress: "###ZARF_VAR_NODE_MAC###"
+  events:
+    enabled: true
+    pollingInterval: 15m
+  baseboardSpec:
+    connection:
+      host: "###ZARF_VAR_ILO_IP###"
+      port: ###ZARF_VAR_ILO_PORT###
+      insecureTLS: true
+      authSecretRef:
+        name: ilo-credentials
+        namespace: seeder-system
+---
+apiVersion: metal.harvesterhci.io/v1alpha1
+kind: Cluster
+metadata:
+  name: "###ZARF_VAR_CLUSTER_NAME###"
+  namespace: seeder-system
+spec:
+  version: "###ZARF_CONST_HARVESTER_VERSION##"
+  imageURL: "http://###ZARF_VAR_K3S_HOST_IP###:32200/harvester-###ZARF_CONST_HARVESTER_VERSION###-amd64.iso"
+  clusterConfig:
+    nameservers:
+      - 10.0.0.1
+    sshKeys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIvFk17g0EtokkX89k9diU6q3FDFINi6aFpt76uFMttV burak.ozkisi@bastiyan.com"
+  nodes:
+    - inventoryReference:
+        name: "###ZARF_VAR_NODE_NAME###"
+        namespace: seeder-system
+      addressPoolReference:
+        name: "###ZARF_VAR_NODE_NAME###-pool"
+        namespace: seeder-system
+  vipConfig:
+    addressPoolReference:
+      name: vip-pool
+      namespace: seeder-system

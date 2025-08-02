@@ -1,0 +1,8 @@
+# values/seeder.yaml
+image:
+  repository: rancher/harvester-seeder
+  tag: ###ZARF_CONST_HARVESTER_VERSION###
+cluster:
+  # These values are templated by Zarf at deploy time
+  imageURL: "http://###ZARF_VAR_K3S_HOST_IP###:32200/harvester-###ZARF_CONST_HARVESTER_VERSION###-amd64.iso"
+  version: "###ZARF_CONST_HARVESTER_VERSION###"

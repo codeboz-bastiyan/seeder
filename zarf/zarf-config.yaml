@@ -1,0 +1,24 @@
+log_format: console
+log_level: debug
+package:
+    create:
+        set:
+            harvester_version: v1.5.0
+    deploy:
+        retries: 3
+        timeout: 15m0s
+        components: 'nginx,hci,seeder'
+        set:
+            k3s_host_ip: '10.0.15.53'
+            cluster_name: 'harvester-cluster-001'
+            node_ip: '10.0.14.51'
+            harvester_vip: '10.0.14.50'
+            network_gateway: '10.0.0.1'
+            network_netmask: '255.255.240.0'
+            node_name: 'harvester-node-01'
+            node_mac: '94:40:C9:48:6D:50'
+            ilo_ip: '10.0.15.56'
+            ilo_port: '623'
+            ilo_username: 'sa_tinkerbell'
+    oci_concurrency: 6
+zarf_cache: ~/.zarf-cache

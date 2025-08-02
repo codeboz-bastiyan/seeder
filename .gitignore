@@ -1,1 +1,3 @@
 bin/*
+zarf/iso/*
+*.tar.zst
