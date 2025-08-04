@@ -33,6 +33,5 @@ package:
             ilo_ip: '10.0.15.56'
             ilo_port: '623'
             ilo_username: 'Administrator'
-            ilo_password: 'ChangeMe'
     oci_concurrency: 6
 zarf_cache: ~/.zarf-cache

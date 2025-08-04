@@ -41,7 +41,7 @@ spec:
     netboot:
       allowPXE: true
       osie:
-        baseURL: http://172.19.96.23/iso/
+        baseURL: http://172.19.96.23/artifacts/
   metadata:
     facility:
       facility_code: on_prem
@@ -72,7 +72,7 @@ spec:
     netboot:
       allowPXE: true
       osie:
-        baseURL: http://172.19.96.23/iso/
+        baseURL: http://172.19.96.23/artifacts/
   metadata:
     facility:
       facility_code: on_prem

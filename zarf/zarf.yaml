@@ -3,13 +3,16 @@ kind: ZarfPackageConfig
 metadata:
   name: harvester-provisioner
   description: "A Zarf package to deploy a single-node Harvester cluster on HPE iLO-managed hardware."
-  version: "v0.0.1-dev1"
+  version: "v0.0.1-dev10"
 
 # This constant is set at package CREATE time.
 constants:
   - name: HARVESTER_VERSION
     value: "###ZARF_PKG_TMPL_HARVESTER_VERSION###" # Default to v1.3.0 if not provided
     description: "The version of Harvester to download and package (e.g., v1.3.0)"
+  - name: HOOK_VERSION
+    value: "###ZARF_PKG_TMPL_HOOK_VERSION###" # Default to v1.3.0 if not provided
+    description: "The version of Hook Os to download and package"
 
 # This 'variables' block defines all user-configurable values at DEPLOY time.
 variables:
@@ -64,21 +67,150 @@ components:
           - ./manifests/nginx.yaml
     images:
       - bash
-      - nginx:1.25.1
+      - nginx:1.27.2
     actions:
+      onCreate:
+        before:
+          - description: "Check that the Harvester ISO and all related artifacts are exist on the packaging filesystem before deploying"
+            cmd: |
+              #!/bin/bash
+              # Exit script on any command error
+              set -e
+              # Exit script if any command in a pipeline fails
+              set -o pipefail
+
+              # --- Configuration ---
+              HARVESTER_VERSION="###ZARF_PKG_TMPL_HARVESTER_VERSION###"
+              BASE_DIR="./iso"
+              DEST_DIR="${BASE_DIR}/${HARVESTER_VERSION}"
+              BASE_URL="https://releases.rancher.com/harvester/${HARVESTER_VERSION}"
+
+              # --- Key Filenames ---
+              ISO_FILE="harvester-${HARVESTER_VERSION}-amd64.iso"
+              RAW_GZ_FILE="harvester-${HARVESTER_VERSION}-amd64.raw.gz"
+              CHECKSUM_FILE="harvester-${HARVESTER_VERSION}-amd64.sha512"
+
+              # --- 1. Setup & Download Latest Checksum ---
+              echo "✅ Ensuring directory exists: ${DEST_DIR}"
+              mkdir -p "${DEST_DIR}"
+              cd "${DEST_DIR}"
+
+              echo "🔄 Always downloading the latest checksum file to ensure accuracy..."
+              # Use -o to overwrite the file, ensuring we always have the latest.
+              curl -L -f -o "${CHECKSUM_FILE}" "${BASE_URL}/${CHECKSUM_FILE}"
+
+              # --- 2. Verify and Download All Required Files ---
+              echo "🔎 Verifying all required release files..."
+              # Loop through each filename listed in the official checksum file
+              for FILE in $(awk '{print $2}' "${CHECKSUM_FILE}"); do
+                  # Check if the file exists
+                  if [ -f "$FILE" ]; then
+                      # If it exists, check its integrity. The '--status' flag is silent on success.
+                      # The '-' tells sha512sum to read the expected checksum from the pipe.
+                      if ! grep "$FILE" "${CHECKSUM_FILE}" | sha512sum --status -c -; then
+                          echo "⚠️ Checksum for ${FILE} is invalid. Re-downloading."
+                          rm "$FILE"
+                          curl -L -f -O "${BASE_URL}/${FILE}"
+                      else
+                          echo "👍 File ${FILE} is valid."
+                      fi
+                  else
+                      # If the file does not exist, download it.
+                      echo "🔎 File ${FILE} not found. Downloading."
+                      curl -L -f -O "${BASE_URL}/${FILE}"
+                  fi
+              done
+              echo "✅ All required source files are present and correct."
+
+              # --- 3. Convert ISO to RAW.GZ with Fallback ---
+              if [ -f "${RAW_GZ_FILE}" ]; then
+                  echo "👍 Tinkerbell image '${RAW_GZ_FILE}' already exists."
+              else
+                  # Define intermediate file for the two-step process
+                  RAW_FILE_TMP="harvester-${HARVESTER_VERSION}-amd64.raw"
+
+                  if command -v qemu-img &> /dev/null; then
+                      echo "🔄 Attempting two-step conversion with qemu-img..."
+                      (
+                          set -e
+                          qemu-img convert -f raw -O raw "${ISO_FILE}" "${RAW_FILE_TMP}"
+                          gzip "${RAW_FILE_TMP}"
+                      ) || {
+                          echo "⚠️ qemu-img process failed. Falling back to dd."
+                          rm -f "${RAW_FILE_TMP}" "${RAW_FILE_TMP}.gz"
+                          dd if="${ISO_FILE}" | gzip -c > "${RAW_GZ_FILE}"
+                      }
+                  else
+                      echo "🔎 qemu-img not found. Using dd."
+                      dd if="${ISO_FILE}" | gzip -c > "${RAW_GZ_FILE}"
+                  fi
+                  echo "✅ Conversion complete."
+              fi
+
+              echo -e "\n🎉 Process complete for version ${HARVESTER_VERSION} in ${DEST_DIR}"
+          - description: "Download required hookos artifacts to hook folder"
+            cmd: |
+              #!/bin/bash
+              # Exit script on any command error
+              set -e
+              # Exit script if any command in a pipeline fails
+              set -o pipefail
+
+              # --- Configuration ---
+              HOOK_VERSION="###ZARF_PKG_TMPL_HOOK_VERSION###"
+              ARCH="x86_64"
+              DEST_DIR="./artifacts/hook"
+              BASE_URL="https://github.com/tinkerbell/hook/releases/download/${HOOK_VERSION}"
+              CHECKSUM_FILE="checksum.txt"
+
+              # --- 1. Setup & Download Checksum ---
+              echo "✅ Ensuring directory exists: ${DEST_DIR}"
+              mkdir -p "${DEST_DIR}"
+              cd "${DEST_DIR}"
+
+              echo "🔄 Always downloading the latest checksum file to ensure accuracy..."
+              # Use -o to overwrite the file, ensuring we always have the latest.
+              # Use -L to follow redirects and -f to fail on server errors.
+              curl -L -f -o "${CHECKSUM_FILE}" "${BASE_URL}/${CHECKSUM_FILE}"
+
+              # --- 2. Verify and Download Required Artifacts ---
+              echo "🔎 Verifying all required '${ARCH}' release files..."
+              # Loop through each filename for the specified architecture listed in the official checksum file.
+              # We use grep to filter for our target architecture and awk to extract the filename.
+              for FILE in $(grep "${ARCH}" "${CHECKSUM_FILE}" | awk '{print $2}'); do
+                  # Check if the file exists
+                  if [ -f "$FILE" ]; then
+                      # If it exists, check its integrity. The '--status' flag is silent on success.
+                      # We grep for the specific file's line to pass to sha512sum.
+                      if ! grep "$FILE" "${CHECKSUM_FILE}" | sha512sum --status -c -; then
+                          echo "⚠️ Checksum for ${FILE} is invalid. Re-downloading."
+                          rm "$FILE"
+                          curl -L -f -O "${BASE_URL}/${FILE}"
+                      else
+                          echo "👍 File ${FILE} is valid."
+                      fi
+                  else
+                      # If the file does not exist, download it.
+                      echo "🔎 File ${FILE} not found. Downloading."
+                      curl -L -f -O "${BASE_URL}/${FILE}"
+                  fi
+              done
+              echo "✅ All required ${ARCH} source files are present and correct."
+
+              echo -e "\n🎉 Process complete for hookOS version ${HOOK_VERSION} in ${DEST_DIR}"
       onDeploy:
         before:
-          - description: "Check that the Harvester ISO exists on the host filesystem before deploying"
+          - description: "Check that the Harvester ISO exists on the correct host filesystem before deploying"
             cmd: |
               echo "🔎 Verifying prerequisite ISO file exists at /opt/hci-provisioner/web/iso..."
-              if test -f "/opt/hci-provisioner/web/iso/harvester-###ZARF_PKG_TMPL_HARVESTER_VERSION###-amd64.iso"; then
+              if test -f "/opt/hci-provisioner/web/artifacts/###ZARF_PKG_TMPL_HARVESTER_VERSION###/harvester-###ZARF_PKG_TMPL_HARVESTER_VERSION###-amd64.iso"; then
                 echo "✅ Prerequisite ISO found."
               else
                 echo "❌ ERROR: Prerequisite ISO not found!"
                 exit 1
               fi
         after:
-          - description: "Wait for the Harvester ISO to be available from the Nginx server"
+          - description: "Test - Cluster Resouce"
             wait:
               cluster:
                 kind: Deployment
@@ -86,26 +218,55 @@ components:
                 namespace: nginx
                 condition: Available
 
-          - description: "Wait for the Harvester ISO to be available from the Nginx server"
+          - description: "Test - Wait for the Harvester ISO to be available from the Nginx server"
             wait:
               network:
                 protocol: http
-                address: localhost:32200/version-###ZARF_PKG_TMPL_HARVESTER_VERSION###.yaml
+                address: localhost:32200/###ZARF_PKG_TMPL_HARVESTER_VERSION###/version.yaml
                 code: 200
-                
+
+  # - name: tinkerbell
+  #   required: true
+  #   description: "Deploys Tinkerbell a dependency of seeder and a Metal server provisioner"
+  #   charts:
+  #     - name: tinkerbell
+  #       version: v0.19.1
+  #       namespace: harvester-system
+  #       # In this case `url` will load the helm chart located in the podinfo OCI repository
+  #       url: oci://ghcr.io/tinkerbell/charts/tinkerbell
+  #       valuesFiles:
+  #         - ./values/tinkerbell.yaml
+  #   actions:
+  #     onDeploy:
+  #       before:
+  #         - description: "Create Dynamic POD_CIDR for tinkerbell"
+  #           cmd: |
+  #             echo $(./zarf tools kubectl get nodes -o jsonpath='{.items[*].spec.podCIDR}' | tr ' ' ',')
+  #           setVariables:
+  #             - name: POD_CIDR
+  #   images:
+  #     - bash:5.2.37
+  #     - ghcr.io/jacobweinstock/relay-init:v0.1.0
+  #     - ghcr.io/kube-vip/kube-vip:v0.9.1
+  #     - ghcr.io/tinkerbell/tinkerbell:v0.19.1
+  #     - nginx:1.27.2
+  #     - ghcr.io/tinkerbell/tink-agent:v0.19.1
+    
+
 
   - name: seeder
     required: true
-    description: "Deploys Harvester Seeder and the full Tinkerbell stack."
+    description: "Deploys Harvester Seeder."
     charts:
       - name: harvester-seeder
-        namespace: seeder-system
+        namespace: harvester-system
         localPath: ../chart/seeder
         version: 0.0.1-dev
         valuesFiles:
           # This file will be templated by Zarf at deploy time with the constant and variable values
           - ./values/seeder.yaml
     images:
+      - rancher/harvester-seeder:###ZARF_PKG_TMPL_HARVESTER_VERSION###
       - bash
       - nginx:1.25.1
       - quay.io/tinkerbell/hegel:v0.11.1
@@ -113,8 +274,9 @@ components:
       - quay.io/tinkerbell/smee:v0.10.1
       - quay.io/tinkerbell/tink-controller:v0.9.0
       - quay.io/tinkerbell/tink:v0.9.0
-      - rancher/harvester-seeder:###ZARF_PKG_TMPL_HARVESTER_VERSION###
+      # Possible images - seeder
       - quay.io/tinkerbell/tink-worker:v0.9.0
+
 
 
   - name: hci
@@ -122,10 +284,17 @@ components:
     description: "Deploys the templated Harvester cluster definition."
     manifests:
       - name: ilo-secret
-        namespace: seeder-system
+        namespace: harvester-system
         files:
           - ./manifests/ilo-secret.yaml
       - name: hci-definition
-        namespace: seeder-system
+        namespace: harvester-system
         files:
           - ./manifests/hci.yaml
+    images:
+      - gmehta3/image2disk:dev
+      - gmehta3/reboot:latest
+      - gmehta3/configure-harvester:latest
+      - gmehta3/harvester-upgrade:master-head
+
+

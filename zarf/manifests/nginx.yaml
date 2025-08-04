@@ -37,7 +37,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.25.1
+        image: nginx:1.27.2
         ports:
         - containerPort: 80
         volumeMounts:
@@ -46,5 +46,5 @@ spec:
       volumes:
       - name: iso-storage
         hostPath:
-          path: /opt/hci-provisioner/web/iso
+          path: /opt/hci-provisioner/web/artifacts
           type: DirectoryOrCreate

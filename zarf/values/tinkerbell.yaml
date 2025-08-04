@@ -1,0 +1,14 @@
+trustedProxies: ###ZARF_VAR_POD_CIDR###
+publicIP:  ###ZARF_VAR_K3S_HOST_IP###
+artifactsFileServer: http://###ZARF_VAR_K3S_HOST_IP###:32200/hook
+deployment:
+  envs:
+    tinkServer:
+      autoEnrollmentEnabled: true
+    smee:
+      dhcpMode: auto-proxy
+service:
+  name: tink-stack
+optional:
+  hookos:
+    arch: x86_64
