@@ -159,6 +159,14 @@ func (s *Server) Start(ctx context.Context) error {
 		enabledControllers = append(coreControllers, embedModeControllers...)
 	} else {
 		enabledControllers = append(coreControllers, nonEmbedModeControllers...)
+	}
+
+	for _, v := range enabledControllers {
+		if err := v.SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("error starting controllers: %v", err)
+		}
+	}
+
 	// need a tmp client as mgr.Client read caches are unavailable
 	// until manager has been started
 	if s.EmbeddedMode {
@@ -173,14 +181,6 @@ func (s *Server) Start(ctx context.Context) error {
 		err = util.SetupLocalCluster(ctx, tmpClient)
 		if err != nil {
 			return fmt.Errorf("error setting up local cluster: %v", err)
-		}
-	}
-
-	}
-
-	for _, v := range enabledControllers {
-		if err := v.SetupWithManager(mgr); err != nil {
-			return fmt.Errorf("error starting controllers: %v", err)
 		}
 	}
 

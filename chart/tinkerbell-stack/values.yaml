@@ -1,4 +1,3 @@
-name: tink-stack
 stack:
   hook:
     enabled: true
@@ -29,7 +28,6 @@ smee:
 hegel:
   image: quay.io/tinkerbell/hegel:v0.11.1
   trustedProxies: *range
-  name: tink-stack
 
 rufio:
   image: quay.io/tinkerbell/rufio:v0.3.2

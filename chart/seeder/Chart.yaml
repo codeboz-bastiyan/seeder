@@ -25,8 +25,3 @@ appVersion: v0.1.0
 
 maintainers:
   - name: harvester
-
-dependencies:
-  - name: stack
-    version: "0.4.2"
-    repository: "file://../tinkerbell-stack"
