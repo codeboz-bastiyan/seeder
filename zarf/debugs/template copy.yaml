@@ -1,0 +1,43 @@
+apiVersion: tinkerbell.org/v1alpha1
+kind: Template
+metadata:
+  creationTimestamp: "2025-08-06T12:02:43Z"
+  generation: 1
+  name: harvester-node-01
+  namespace: harvester-system
+spec:
+  data: |
+    version: "0.1"
+    name: harvester-installation
+    id: ""
+    global_timeout: 36000
+    tasks:
+        - name: harvester-os-installation
+          worker: '{{.device_1}}'
+          volumes:
+            - /dev:/dev
+            - /dev/console:/dev/console
+            - /lib/firmware:/lib/firmware
+          actions:
+            # - name: "stream harvester"
+            #   image: quay.io/tinkerbell/actions/image2disk:latest
+            #   timeout: 90
+            #   environment:
+            #       IMG_URL: http://10.0.15.53:32200/v1.5.1/harvester-v1.5.1-amd64.raw.gz
+            #       DEST_DISK: /dev/sda
+            #       COMPRESSED: true
+            
+            # - name: configure-harvester
+            #   image: gmehta3/configure-harvester:latest
+            #   timeout: 90
+            #   environment:
+            #     HARVESTER_DEVICE: /dev/sda
+            #     HARVESTER_STREAMDISK_CLOUDINIT_URL: http://10.0.15.53:32200/create.yaml
+            #     HARVESTER_TTY: tty1
+
+            - name: reboot-harvester
+              image: gmehta3/reboot:latest
+              timeout: 90
+              volumes:
+                - /worker:/worker
+         

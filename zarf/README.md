@@ -8,11 +8,10 @@ This directory contains the necessary Zarf configuration and artifacts to initia
 
 This folder holds all the application binaries, images, and any other files required for deployment. All artifacts will be packaged into the final Zarf bundle.
 
-**Note:** For development purposes, a symlink is currently used to point to the host file system.
+**Note:** For development purposes, a symlink is currently used to point to the host file system for nginx deployment.
 
 ```bash
-# Example symlink
-/opt/hci-provisioner/web/artifacts/ -> /home/bastiyan/Documents/git/seeder/zarf/artifacts
+ln -s /home/bastiyan/Documents/git/seeder/zarf/artifacts /opt/hci-provisioner/web/
 ```
 
 -----

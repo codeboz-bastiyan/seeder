@@ -1,0 +1,19 @@
+# rufio-job.yaml
+apiVersion: bmc.tinkerbell.org/v1alpha1
+kind: Job
+metadata:
+  name: set-pxe-boot-harvester-node-01
+  namespace: harvester-system
+spec:
+  # Reference the Machine object defined above.
+  machineRef:
+    name: harvester-node-01
+    namespace: harvester-system
+  # Define the ordered list of tasks.
+  tasks:
+    - powerAction: "off"
+    - oneTimeBootDeviceAction:
+        device:
+          - "pxe"
+        efiBoot: true
+    - powerAction: "on"

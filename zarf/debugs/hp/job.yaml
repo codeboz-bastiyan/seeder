@@ -1,0 +1,19 @@
+apiVersion: bmc.tinkerbell.org/v1alpha1
+kind: Job
+metadata:
+  name: set-persistent-pxe-boot-harvester-node-01
+  namespace: harvester-system
+spec:
+  machineRef:
+    name: harvester-node-01
+    namespace: harvester-system
+  tasks:
+    # Turn off the machine first
+    - powerAction: "off"
+
+        # Set persistent boot device to PXE
+    - bootDevice:
+        device: "pxe"
+
+    # Power on the machine
+    - powerAction: "on"

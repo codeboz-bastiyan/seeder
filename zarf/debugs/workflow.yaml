@@ -1,0 +1,13 @@
+apiVersion: tinkerbell.org/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: "2025-08-06T12:02:43Z"
+  generation: 1
+  name: harvester-node-01
+  namespace: harvester-system
+  resourceVersion: "1339"
+  uid: d3a5a1b1-674d-4bdd-8c4f-8dc5202388e7
+spec:
+  hardwareMap:
+    device_1: "94:40:c9:48:6d:50"
+  templateRef: harvester-node-01

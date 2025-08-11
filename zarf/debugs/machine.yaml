@@ -1,0 +1,13 @@
+apiVersion: bmc.tinkerbell.org/v1alpha1
+kind: Machine
+metadata:
+  name: harvester-node-01
+  namespace: harvester-system
+spec:
+  connection:
+    authSecretRef:
+      name: ilo-credentials
+      namespace: harvester-system
+    host: 10.0.15.56
+    insecureTLS: true
+    port: 623

@@ -1,3 +1,4 @@
 bin/*
 zarf/artifacts/*
 *.tar.zst
+zarf/artifacts/*

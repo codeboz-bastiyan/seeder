@@ -3,7 +3,7 @@ kind: ZarfPackageConfig
 metadata:
   name: harvester-provisioner
   description: "A Zarf package to deploy a single-node Harvester cluster on HPE iLO-managed hardware."
-  version: "v0.0.1-dev10"
+  version: "v0.0.1-dev1"
 
 # This constant is set at package CREATE time.
 constants:
@@ -71,7 +71,7 @@ components:
     actions:
       onCreate:
         before:
-          - description: "Check that the Harvester ISO and all related artifacts are exist on the packaging filesystem before deploying"
+          - description: "Check that the Harvester ISO and all  artifacts are exist on the packaging filesystem before deploying"
             cmd: |
               #!/bin/bash
               # Exit script on any command error
@@ -98,6 +98,7 @@ components:
               echo "🔄 Always downloading the latest checksum file to ensure accuracy..."
               # Use -o to overwrite the file, ensuring we always have the latest.
               curl -L -f -o "${CHECKSUM_FILE}" "${BASE_URL}/${CHECKSUM_FILE}"
+              curl -L -f -O "${BASE_URL}/version.yaml"
 
               # --- 2. Verify and Download All Required Files ---
               echo "🔎 Verifying all required release files..."
@@ -118,6 +119,7 @@ components:
                       # If the file does not exist, download it.
                       echo "🔎 File ${FILE} not found. Downloading."
                       curl -L -f -O "${BASE_URL}/${FILE}"
+                      
                   fi
               done
               echo "✅ All required source files are present and correct."
@@ -195,6 +197,7 @@ components:
                       curl -L -f -O "${BASE_URL}/${FILE}"
                   fi
               done
+              tar -xf "hook_x86_64.tar.gz"
               echo "✅ All required ${ARCH} source files are present and correct."
 
               echo -e "\n🎉 Process complete for hookOS version ${HOOK_VERSION} in ${DEST_DIR}"
@@ -202,7 +205,7 @@ components:
         before:
           - description: "Check that the Harvester ISO exists on the correct host filesystem before deploying"
             cmd: |
-              echo "🔎 Verifying prerequisite ISO file exists at /opt/hci-provisioner/web/artifacts..."
+              echo "🔎 Verifying prerequisite ISO file exists at /opt/hci-provisioner/web/arti..."
               if test -f "/opt/hci-provisioner/web/artifacts/###ZARF_PKG_TMPL_HARVESTER_VERSION###/harvester-###ZARF_PKG_TMPL_HARVESTER_VERSION###-amd64.iso"; then
                 echo "✅ Prerequisite ISO found."
               else
@@ -224,34 +227,45 @@ components:
                 protocol: http
                 address: localhost:32200/###ZARF_PKG_TMPL_HARVESTER_VERSION###/version.yaml
                 code: 200
+          - description: "Test - Wait for the Hook Os artifacts to be avaolable from the "
+            wait:
+              network:
+                protocol: http
+                address: localhost:32200/hook/checksum.txt
+                code: 200
 
-  # - name: tinkerbell
-  #   required: true
-  #   description: "Deploys Tinkerbell a dependency of seeder and a Metal server provisioner"
-  #   charts:
-  #     - name: tinkerbell
-  #       version: v0.19.1
-  #       namespace: harvester-system
-  #       # In this case `url` will load the helm chart located in the podinfo OCI repository
-  #       url: oci://ghcr.io/tinkerbell/charts/tinkerbell
-  #       valuesFiles:
-  #         - ./values/tinkerbell.yaml
-  #   actions:
-  #     onDeploy:
-  #       before:
-  #         - description: "Create Dynamic POD_CIDR for tinkerbell"
-  #           cmd: |
-  #             echo $(./zarf tools kubectl get nodes -o jsonpath='{.items[*].spec.podCIDR}' | tr ' ' ',')
-  #           setVariables:
-  #             - name: POD_CIDR
-  #   images:
-  #     - bash:5.2.37
-  #     - ghcr.io/jacobweinstock/relay-init:v0.1.0
-  #     - ghcr.io/kube-vip/kube-vip:v0.9.1
-  #     - ghcr.io/tinkerbell/tinkerbell:v0.19.1
-  #     - nginx:1.27.2
-  #     - ghcr.io/tinkerbell/tink-agent:v0.19.1
-    
+  - name: tinkerbell
+    required: true
+    description: "Deploys Tinkerbell a Metal server provisioner"
+    charts:
+      - name: tinkerbell
+        version: v0.19.1
+        namespace: harvester-system
+        # In this case `url` will load the helm chart located in the podinfo OCI repository
+        url: oci://ghcr.io/tinkerbell/charts/tinkerbell
+        valuesFiles:
+          - ./values/tinkerbell.yaml
+    actions:
+      onDeploy:
+        before:
+          - description: "Create Dynamic POD_CIDR for tinkerbell"
+            cmd: |
+              echo $(./zarf tools kubectl get nodes -o jsonpath='{.items[*].spec.podCIDR}' | tr ' ' ',')
+            setVariables:
+              - name: POD_CIDR
+    images:
+      - bash:5.2.37
+      - ghcr.io/jacobweinstock/relay-init:v0.1.0
+      - ghcr.io/kube-vip/kube-vip:v0.9.1
+      - ghcr.io/tinkerbell/tinkerbell:v0.19.1
+      - nginx:1.27.2
+      - ghcr.io/tinkerbell/tink-agent:v0.19.1
+      - quay.io/tinkerbell/actions/image2disk:latest
+      - gmehta3/reboot:latest
+      - gmehta3/configure-harvester:latest
+      - gmehta3/harvester-upgrade:master-head
+
+
 
 
   - name: seeder
@@ -266,16 +280,7 @@ components:
           # This file will be templated by Zarf at deploy time with the constant and variable values
           - ./values/seeder.yaml
     images:
-      - rancher/harvester-seeder:###ZARF_PKG_TMPL_HARVESTER_VERSION###
-      - bash
-      - nginx:1.25.1
-      - quay.io/tinkerbell/hegel:v0.11.1
-      - quay.io/tinkerbell/rufio:v0.3.2
-      - quay.io/tinkerbell/smee:v0.10.1
-      - quay.io/tinkerbell/tink-controller:v0.9.0
-      - quay.io/tinkerbell/tink:v0.9.0
-      # Possible images - seeder
-      - quay.io/tinkerbell/tink-worker:v0.9.0
+      - rancher/harvester-seeder:main-head
 
 
 

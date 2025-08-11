@@ -20,7 +20,7 @@ package:
     deploy:
         retries: 3
         timeout: 15m0s
-        components: 'nginx,hci,seeder'
+        components: 'nginx,tinkerbell'
         set:
             k3s_host_ip: '10.0.15.53'
             cluster_name: 'harvester-cluster-001'

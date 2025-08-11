@@ -1,0 +1,35 @@
+apiVersion: tinkerbell.org/v1alpha1
+kind: Hardware
+metadata:
+  name: harvester-node-01
+  namespace: harvester-system
+spec:
+  metadata:
+    instance:
+      id: harvester-node-01
+      hostname: harvester-node-01
+  disks:
+  - device: /dev/sda
+  interfaces:
+  - dhcp:
+      mac: "c4:65:16:af:29:66"
+      hostname: harvester-node-01
+      ip:
+        address: 10.0.15.11
+        gateway: 10.0.0.1
+        netmask: 255.255.240.0
+      name_servers:
+      - 10.0.0.1
+      - 8.8.8.8
+      - 1.1.1.1
+      uefi: true
+    netboot:
+      allowPXE: true
+      allowWorkflow: false
+      ipxe:
+          contents: |
+            kernel http://10.0.15.53:32200/v1.5.1//harvester-v1.5.1-vmlinuz-amd64 initrd=harvester-v1.5.1-initrd-amd64 ip=10.0.15.51::10.0.0.1:255.255.240.0::eno1:off nameserver=10.0.0.1  harvester.install.with_net_images=true net.ifnames=1 rd.cos.disable rd.noverifyssl console=tty1 root=live:http://10.0.15.53:32200/v1.5.1/harvester-v1.5.1-rootfs-amd64.squashfs rd.live.squashimg=harvester-v1.5.1-rootfs-amd64.squashfs harvester.install.automatic=true harvester.install.config_url=http://10.0.15.53:32200/create.yaml
+            initrd http://10.0.15.53:32200/v1.5.1/harvester-v1.5.1-initrd-amd64
+            boot
+          
+    

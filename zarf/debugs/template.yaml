@@ -1,0 +1,135 @@
+apiVersion: tinkerbell.org/v1alpha1
+kind: Template
+metadata:
+  creationTimestamp: "2025-08-06T12:02:43Z"
+  generation: 1
+  name: harvester-node-01
+  namespace: harvester-system
+spec:
+  data: |
+    version: "0.1"
+    name: harvester-installation
+    id: ""
+    global_timeout: 36000
+    tasks:
+        - name: harvester-os-installation
+          worker: '{{.device_1}}'
+          volumes:
+            - /dev:/dev
+            - /dev/console:/dev/console
+            - /lib/firmware:/lib/firmware:ro
+          actions:
+            - name: "stream harvester"
+              image: quay.io/tinkerbell/actions/image2disk:latest
+              timeout: 90
+              environment:
+                  IMG_URL: http://10.0.15.53:32200/v1.5.1/harvester-v1.5.1-amd64.raw.gz
+                  DEST_DISK: /dev/sda
+                  COMPRESSED: true
+
+            - name: rescan-partition-table
+              image: quay.io/tinkerbell/actions/cexec:latest
+              timeout: 60
+              environment:
+                BLOCK_DEVICE: /dev/sda
+              command: [ "/bin/sh", "-c", "echo -e \"w\" | fdisk $BLOCK_DEVICE ,partprobe $BLOCK_DEVICE" ]
+
+            - name: fetch-cloud-init-file
+              image: quay.io/tinkerbell/actions/fetch:latest
+              timeout: 90
+              environment:
+                DEST_PATH: /tmp/userdata.yaml
+                SRC_URL: "http://10.0.15.53:32200/create.yaml"
+                INSECURE: "true"
+
+            - name: apply-cloud-init-config
+              image: quay.io/tinkerbell/actions/cexec:latest
+              timeout: 90
+              environment:
+                BLOCK_DEVICE: /dev/sda
+                OEM_PARTITION: 2
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -ex
+                  apk update && apk add yq
+                  DEVICE_PATH="${BLOCK_DEVICE}${OEM_PARTITION}"
+                  mkdir -p /oem && mount -t ext4 "${DEVICE_PATH}" /oem
+                  mv /tmp/userdata.yaml /oem/userdata.yaml
+                  yq e -i '.install.device = env(BLOCK_DEVICE)' /oem/harvester.config
+                  umount /oem
+
+            - name: patch-console-boot-args
+              image: quay.io/tinkerbell/actions/cexec:latest
+              timeout: 120
+              environment:
+                  BLOCK_DEVICE: /dev/sda
+                  STATE_PARTITION: 4
+                  HARVESTER_TTY: tty1
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -ex
+                  TARGET_DIR="/run/cos/target"
+                  MNT_DIR="/mnt/cos_state"
+                  DEVICE_PATH="${BLOCK_DEVICE}${STATE_PARTITION}"
+
+                  mkdir -p "${TARGET_DIR}" "${MNT_DIR}"
+
+                  echo "Mounting state partition ${DEVICE_PATH}"
+                  mount -t ext4 "${DEVICE_PATH}" "${MNT_DIR}"
+
+                  echo "Mounting active cOS image"
+                  mount "${MNT_DIR}/cOS/active.img" "${TARGET_DIR}"
+
+                  # This is the logic from the update_boot_args function
+                  if [ -z "${HARVESTER_TTY}" ]; then
+                    TTY=$(tty | sed 's!/dev/!!')
+                  else
+                    TTY=$HARVESTER_TTY
+                  fi
+
+                  if [ -e "/dev/${TTY%,*}" ] && [ "$TTY" != tty1 ] && [ "$TTY" != console ] && [ -n "$TTY" ]; then
+                    sed -i "1s/.*/set console_params=\"console=${TTY}\"/g" ${TARGET_DIR}/etc/cos/bootargs.cfg
+                  else
+                    sed -i "1s/.*/set console_params=\"console=tty1\"/g" ${TARGET_DIR}/etc/cos/bootargs.cfg
+                  fi
+                  echo "Console patched successfully"
+
+                  umount "${TARGET_DIR}"
+                  umount "${MNT_DIR}"
+
+            - name: resize-and-format-data-disk
+              image: quay.io/tinkerbell/actions/cexec:latest
+              timeout: 300
+              environment:
+                BLOCK_DEVICE: /dev/sda
+                LH_PARTITION_NUM: 6
+                LH_PARTITION_LABEL: HARV_LH_DEFAULT
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -ex
+                  DEVICE_PATH="${BLOCK_DEVICE}${LH_PARTITION_NUM}"
+
+                  echo "Moving GPT backup header to end of disk"
+                  sgdisk -e "${BLOCK_DEVICE}"
+
+                  echo "Resizing partition ${LH_PARTITION_NUM} to 100%"
+                  parted "${BLOCK_DEVICE}" resizepart "${LH_PARTITION_NUM}" 100%
+
+                  echo "Formatting ${DEVICE_PATH} with ext4"
+                  # 'yes y' is to auto-confirm overwrite if a filesystem already exists.
+                  yes y | mke2fs -q -t ext4 "${DEVICE_PATH}"
+
+                  echo "Setting filesystem label to ${LH_PARTITION_LABEL}"
+                  e2label "${DEVICE_PATH}" "${LH_PARTITION_LABEL}"
+
+            - name: reboot-harvester
+              image: gmehta3/reboot:latest
+              timeout: 90
+              volumes:
+                - /worker:/worker
